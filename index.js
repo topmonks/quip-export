@@ -1,7 +1,7 @@
 import { NotionAdapter } from "./adapter/notion";
 import { FileSystemAdapter } from "./adapter/file-system";
 import {
-  QuipState,
+  QuipExport,
   getCurrentUser,
   readQuipFolder,
   getThreadAsHTML,
@@ -9,40 +9,40 @@ import {
 } from "./quip";
 import { QuipAWSS3ImageUpload } from "./extension/aws-s3-image";
 
-const quipExtensions = [new QuipAWSS3ImageUpload()];
-const quipState = new QuipState(undefined, quipExtensions);
+const extensions = [new QuipAWSS3ImageUpload()];
 const adapters = [new NotionAdapter(), new FileSystemAdapter()];
+const quipExport = new QuipExport(undefined, extensions, adapters);
 
-if (await quipState.existTempFile()) {
+if (await quipExport.existTempFile()) {
   console.log("found state file, loading it...");
-  await quipState.loadFromTempFile();
+  await quipExport.loadFromTempFile();
 } else {
-  const currentUser = await getCurrentUser(quipState);
-  quipState.setInitialFolders(currentUser.group_folder_ids);
+  const currentUser = await getCurrentUser(quipExport);
+  quipExport.setInitialFolders(currentUser.group_folder_ids);
 }
 
-while (quipState.folderIdsToRead.length) {
-  const folderToRead = quipState.folderIdsToRead.slice(-1)[0];
+while (quipExport.folderIdsToRead.length) {
+  const folderToRead = quipExport.folderIdsToRead.slice(-1)[0];
   if (!folderToRead) {
     break;
   }
 
   const { folderId, parentFolderId } = folderToRead;
-  const folder = await readQuipFolder(folderId, quipState);
-  quipState.allFolders.push(folder);
+  const folder = await readQuipFolder(folderId, quipExport);
+  quipExport.allFolders.push(folder);
 
   console.log("processing folder:", folder.folder.title);
 
-  const parent = quipState.findFolderById(parentFolderId);
+  const parent = quipExport.findFolderById(parentFolderId);
 
   for (const child of folder.children) {
     if (child.folder_id) {
-      quipState.folderIdsToRead.push({
+      quipExport.folderIdsToRead.push({
         folderId: child.folder_id,
         parentFolderId: folder.folder.id,
       });
     } else if (child.thread_id) {
-      quipState.files.push({
+      quipExport.files.push({
         fileId: child.thread_id,
         parentFolderId: folder.folder.id,
       });
@@ -60,20 +60,20 @@ while (quipState.folderIdsToRead.length) {
     }
   }
 
-  quipState.folderIdsToRead.pop();
+  quipExport.folderIdsToRead.pop();
 
-  while (quipState.files.length) {
-    const file = quipState.files.slice(-1)[0];
+  while (quipExport.files.length) {
+    const file = quipExport.files.slice(-1)[0];
     if (!file) {
       break;
     }
-    let html = await getThreadAsHTML(file.fileId, quipState);
-    html = await quipState.applyExtensions(html);
-    const thread = await getThread(file.fileId, quipState);
+    let html = await getThreadAsHTML(file.fileId, quipExport);
+    html = await quipExport.applyExtensions(html);
+    const thread = await getThread(file.fileId, quipExport);
 
     console.log("processing file:", thread.title);
     try {
-      const parent = quipState.findFolderById(file.parentFolderId);
+      const parent = quipExport.findFolderById(file.parentFolderId);
 
       for (const adapter of adapters) {
         await adapter.onFile({
@@ -86,6 +86,6 @@ while (quipState.folderIdsToRead.length) {
       console.error("adapter unhandled onFile error", e);
     }
 
-    quipState.files.pop();
+    quipExport.files.pop();
   }
 }

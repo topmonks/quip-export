@@ -1,11 +1,15 @@
 import { mkdirSync } from "fs";
 import { mkdir, writeFile } from "fs/promises";
 import { resolve } from "path";
+import { BaseAdapter } from "./base";
 
-export class FileSystemAdapter {
+export class FileSystemAdapter extends BaseAdapter {
+  id = "file-system";
   root = "export";
-  paths = {};
+
   constructor() {
+    super();
+
     try {
       mkdirSync(this.root);
     } catch (e) {

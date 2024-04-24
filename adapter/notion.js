@@ -5,8 +5,9 @@ import { toMarkdown } from "mdast-util-to-markdown";
 import { gfmTableToMarkdown } from "mdast-util-gfm-table";
 import { markdownToBlocks } from "@tryfabric/martian";
 import chunk from "lodash.chunk";
+import { BaseAdapter } from "./base";
 
-export class NotionAdapter {
+export class NotionAdapter extends BaseAdapter {
   /**
    *
    * @type {Client}
@@ -15,9 +16,10 @@ export class NotionAdapter {
   client;
   root;
 
-  paths = {};
+  id = "notion";
 
   constructor() {
+    super();
     if (!process.env.NOTION_ROOT_PAGE) {
       throw new Error("missing root notion page id attr");
     }

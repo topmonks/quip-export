@@ -2,7 +2,9 @@ import { open, readFile, writeFile } from "fs/promises";
 import { fromHtml } from "hast-util-from-html";
 import { toHtml } from "hast-util-to-html";
 
-export class QuipState {
+export class QuipExport {
+  saveTempFileOnAPILimit = true;
+  saveTempFileOnProcessExit = true;
   tempFileName = "quip-notion-state.json";
   root = { tree: [], folder: { id: "_ROOT_" } };
   /**
@@ -30,18 +32,51 @@ export class QuipState {
   files = [];
 
   extensions;
+  /**
+   *
+   * @memberof QuipExport
+   * @type {import("./adapter/base").BaseAdapter[]}
+   */
+  adapters;
 
   /**
    *
    * @param {string[]} initialFolders
    */
-  constructor(initialFolders = [], extensions = []) {
+  constructor(initialFolders = [], extensions = [], adapters = []) {
     if (!process.env.QUIP_TOKEN) {
       throw new Error("env variable QUIP_TOKEN not set");
     }
 
     this.setInitialFolders(initialFolders);
     this.extensions = extensions;
+    this.adapters = adapters;
+
+    if (this.saveTempFileOnProcessExit) {
+      // "kill"
+      process.on("SIGTERM", () => {
+        this.saveToTempFile().finally(() => {
+          process.exit(0);
+        });
+      });
+
+      // ctrl-c
+      process.on("SIGINT", () => {
+        this.saveToTempFile()
+          .catch((e) => console.error(e))
+          .finally(() => {
+            process.exit(0);
+          });
+      });
+
+      // errors
+      process.on("uncaughtException", (e) => {
+        console.error(e);
+        this.saveToTempFile().finally(() => {
+          process.exit(1);
+        });
+      });
+    }
   }
 
   async applyExtensions(html) {
@@ -56,8 +91,6 @@ export class QuipState {
     for (const extension of this.extensions) {
       if (extension.check(root, quipState)) {
         await extension.mutate(root, quipState);
-
-        console.log(root);
       }
 
       if (root.children?.length) {
@@ -101,11 +134,20 @@ export class QuipState {
   }
 
   async saveToTempFile() {
+    const adapterData = [];
+    for (const adapter of this.adapters) {
+      adapterData.push({
+        id: adapter.id,
+        data: await adapter.saveToTempFile(),
+      });
+    }
+
     const data = {
       date: new Date(),
       foldersToRead: this.folderIdsToRead,
       files: this.files,
       allFolders: this.allFolders,
+      adapterData: adapterData,
     };
 
     await writeFile(this.tempFileName, JSON.stringify(data));
@@ -115,6 +157,16 @@ export class QuipState {
     const f = await readFile(this.tempFileName);
 
     const data = JSON.parse(f.toString());
+
+    for (const adapterData of data.adapterData) {
+      const adapter = this.adapters.find((e) => e.id === adapterData.id);
+
+      if (!adapter) {
+        continue;
+      }
+
+      await adapter.loadFromTempFile(adapterData.data);
+    }
 
     this.folderIdsToRead = data.foldersToRead;
     this.files = data.files;
@@ -133,13 +185,17 @@ export class QuipState {
   async apiRequest(url, init) {
     if (this.userRateLimit <= 0) {
       console.log("user rate limit hit");
-      await this.saveToTempFile();
+      if (this.saveTempFileOnAPILimit) {
+        await this.saveToTempFile();
+      }
       throw new Error("user rate limit hit");
     }
 
     if (this.companyRateLimit <= 0) {
       console.log("company rate limit hit");
-      await this.saveToTempFile();
+      if (this.saveTempFileOnAPILimit) {
+        await this.saveToTempFile();
+      }
       throw new Error("company rate limit hit");
     }
 
@@ -167,7 +223,7 @@ export class QuipState {
  *
  *
  * @param {string} folderId
- * @param {QuipState} quipState
+ * @param {QuipExport} quipState
  * @return {import("./typedefs").QuipFolder}
  */
 export async function readQuipFolder(folderId, quipState) {
@@ -183,7 +239,7 @@ export async function readQuipFolder(folderId, quipState) {
 /**
  *
  *
- * @param {QuipState} quipState
+ * @param {QuipExport} quipState
  */
 export async function getCurrentUser(quipState) {
   return await quipState
@@ -198,7 +254,7 @@ export async function getCurrentUser(quipState) {
 /**
  *
  * @param {string} fileId
- * @param {QuipState} quipState
+ * @param {QuipExport} quipState
  * @param {import("./typedefs").QuipThreadHTML | undefined} previousPart
  */
 export async function getThreadAsHTML(fileId, quipState, previousPart) {
@@ -229,7 +285,7 @@ export async function getThreadAsHTML(fileId, quipState, previousPart) {
 /**
  *
  * @param {string} threadId
- * @param {QuipState} quipState
+ * @param {QuipExport} quipState
  */
 export async function getThread(threadId, quipState) {
   return await quipState
@@ -246,7 +302,7 @@ export async function getThread(threadId, quipState) {
  *
  * @param {string} threadId
  * @param {string} blobId
- * @param {QuipState} quipState
+ * @param {QuipExport} quipState
  */
 export async function getBlob(threadId, blobId, quipState) {
   return await quipState.apiRequest(

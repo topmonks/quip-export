@@ -33,7 +33,10 @@ export class QuipAWSS3ImageUpload {
     const type = mime.lookup(name);
     const key = threadId + "-" + blobId + "." + mime.extension(type);
 
-    console.log(root.properties, name, type, key);
+    if (type === false) {
+      console.log("unknown s3 image file");
+      console.log(root.properties);
+    }
 
     const notionImageStream = await getBlob(threadId, blobId, quipState).then(
       (r) => Readable.fromWeb(r.body),
