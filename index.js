@@ -1,34 +1,91 @@
-import { QuipState, getCurrentUser, readFolder } from "./quip";
-const quipState = new QuipState();
+import { NotionAdapter } from "./adapter/notion";
+import { FileSystemAdapter } from "./adapter/file-system";
+import {
+  QuipState,
+  getCurrentUser,
+  readQuipFolder,
+  getThreadAsHTML,
+  getThread,
+} from "./quip";
+import { QuipAWSS3ImageUpload } from "./extension/aws-s3-image";
 
-if (await quipState.isFile()) {
+const quipExtensions = [new QuipAWSS3ImageUpload()];
+const quipState = new QuipState(undefined, quipExtensions);
+const adapters = [new NotionAdapter(), new FileSystemAdapter()];
+
+if (await quipState.existTempFile()) {
   console.log("found state file, loading it...");
-  await quipState.load();
+  await quipState.loadFromTempFile();
 } else {
   const currentUser = await getCurrentUser(quipState);
   quipState.setInitialFolders(currentUser.group_folder_ids);
 }
 
-while (quipState.foldersToRead.length) {
-  const folderToRead = quipState.foldersToRead.pop();
+while (quipState.folderIdsToRead.length) {
+  const folderToRead = quipState.folderIdsToRead.slice(-1)[0];
   if (!folderToRead) {
-    continue;
+    break;
   }
 
-  const { folderId, parent } = folderToRead;
-  const folder = await readFolder(folderId, quipState);
+  const { folderId, parentFolderId } = folderToRead;
+  const folder = await readQuipFolder(folderId, quipState);
+  quipState.allFolders.push(folder);
 
-  console.log("processing", folder.folder.title);
-  folder.tree = [];
+  console.log("processing folder:", folder.folder.title);
 
-  parent.tree.push(folder);
+  const parent = quipState.findFolderById(parentFolderId);
 
   for (const child of folder.children) {
     if (child.folder_id) {
-      quipState.foldersToRead.push({
+      quipState.folderIdsToRead.push({
         folderId: child.folder_id,
-        parent: folder,
+        parentFolderId: folder.folder.id,
+      });
+    } else if (child.thread_id) {
+      quipState.files.push({
+        fileId: child.thread_id,
+        parentFolderId: folder.folder.id,
       });
     }
+  }
+
+  for (const adapter of adapters) {
+    try {
+      await adapter.onFolder({
+        folder,
+        parent,
+      });
+    } catch (e) {
+      console.error("adapter unhandled onFolder error", e);
+    }
+  }
+
+  quipState.folderIdsToRead.pop();
+
+  while (quipState.files.length) {
+    const file = quipState.files.slice(-1)[0];
+    if (!file) {
+      break;
+    }
+    let html = await getThreadAsHTML(file.fileId, quipState);
+    html = await quipState.applyExtensions(html);
+    const thread = await getThread(file.fileId, quipState);
+
+    console.log("processing file:", thread.title);
+    try {
+      const parent = quipState.findFolderById(file.parentFolderId);
+
+      for (const adapter of adapters) {
+        await adapter.onFile({
+          thread,
+          html,
+          parent,
+        });
+      }
+    } catch (e) {
+      console.error("adapter unhandled onFile error", e);
+    }
+
+    quipState.files.pop();
   }
 }

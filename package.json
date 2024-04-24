@@ -27,7 +27,18 @@
     "supertest": "6.3.4"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "3.556.0",
+    "@aws-sdk/lib-storage": "3.556.0",
+    "@notionhq/client": "2.2.15",
+    "@tryfabric/martian": "1.2.4",
     "dotenv": "16.4.5",
-    "extensionless": "1.9.6"
+    "extensionless": "1.9.6",
+    "hast-util-from-html": "2.0.1",
+    "hast-util-to-html": "9.0.1",
+    "hast-util-to-mdast": "10.1.0",
+    "lodash.chunk": "4.2.0",
+    "mdast-util-gfm-table": "2.0.0",
+    "mdast-util-to-markdown": "2.1.0",
+    "mime-types": "2.1.35"
   }
 }
