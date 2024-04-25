@@ -243,7 +243,6 @@ export class QuipExport {
       }
 
       const folder = await readQuipFolder(folderId, this);
-      this.allFolders.push(folder);
 
       console.log("processing folder:", folder.folder.title);
 
@@ -274,6 +273,7 @@ export class QuipExport {
         }
       }
 
+      this.allFolders.push(folder);
       this.folderIdsToRead.pop();
 
       await this.processFiles();
