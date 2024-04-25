@@ -5,7 +5,7 @@ import { toMarkdown } from "mdast-util-to-markdown";
 import { gfmTableToMarkdown } from "mdast-util-gfm-table";
 import { markdownToBlocks } from "@tryfabric/martian";
 import chunk from "lodash.chunk";
-import { BaseAdapter } from "./base";
+import { BaseAdapter } from "./base.js";
 
 export class NotionAdapter extends BaseAdapter {
   /**

@@ -1,9 +1,8 @@
 import { PassThrough, Readable } from "stream";
-import { blob } from "stream/consumers";
 import { Upload } from "@aws-sdk/lib-storage";
 import { S3Client } from "@aws-sdk/client-s3";
 import mime from "mime-types";
-import { getBlob } from "../quip";
+import { getBlob } from "../quip.js";
 
 export class QuipAWSS3ImageUpload {
   srcRegex = /^\/blob\/(\w+)\/(\w+)$/g;

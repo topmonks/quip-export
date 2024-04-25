@@ -218,13 +218,24 @@ export class QuipExport {
     return resp;
   }
 
+  groupFolders = true;
+  privateFolder = true;
+
   async initFolders() {
     if (await this.existTempFile()) {
       console.log("found state file, loading it...");
       await this.loadFromTempFile();
     } else {
       const currentUser = await getCurrentUser(this);
-      this.setInitialFolders(currentUser.group_folder_ids);
+      let folderIds = [];
+
+      if (this.groupFolders) {
+        folderIds = folderIds.concat(currentUser.group_folder_ids);
+      }
+      if (this.privateFolder) {
+        folderIds.push(currentUser.private_folder_id);
+      }
+      this.setInitialFolders(folderIds);
     }
   }
 

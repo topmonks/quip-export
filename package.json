@@ -1,8 +1,9 @@
 {
-  "name": "quip-notion",
+  "name": "@topmonks/quip-notion",
   "version": "1.0.0",
   "description": "",
   "main": "index.js",
+  "bin": "bin.js",
   "scripts": {
     "dev": "NODE_OPTIONS=\"--openssl-legacy-provider -r dotenv/config\" node --import=extensionless/register",
     "test": "echo \"Error: no test specified\" && exit 1"
@@ -31,6 +32,7 @@
     "@aws-sdk/lib-storage": "3.556.0",
     "@notionhq/client": "2.2.15",
     "@tryfabric/martian": "1.2.4",
+    "commander": "12.0.0",
     "dotenv": "16.4.5",
     "extensionless": "1.9.6",
     "hast-util-from-html": "2.0.1",
