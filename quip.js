@@ -11,7 +11,7 @@ export class QuipExport {
    *
    *
    * @memberof QuipState
-   * @type {Folder[]}
+   * @type {import("./typedefs").QuipFolder[]}
    */
   allFolders = [this.root];
 
@@ -29,7 +29,7 @@ export class QuipExport {
    * @memberof QuipState
    * @type {{fileId: string, parentFolderId: string}[]}
    */
-  files = [];
+  filesToRead = [];
 
   extensions;
   /**
@@ -145,7 +145,7 @@ export class QuipExport {
     const data = {
       date: new Date(),
       foldersToRead: this.folderIdsToRead,
-      files: this.files,
+      files: this.filesToRead,
       allFolders: this.allFolders,
       adapterData: adapterData,
     };
@@ -169,7 +169,7 @@ export class QuipExport {
     }
 
     this.folderIdsToRead = data.foldersToRead;
-    this.files = data.files;
+    this.filesToRead = data.files;
     this.allFolders = data.allFolders;
   }
 
@@ -217,6 +217,98 @@ export class QuipExport {
 
     return resp;
   }
+
+  async initFolders() {
+    if (await this.existTempFile()) {
+      console.log("found state file, loading it...");
+      await this.loadFromTempFile();
+    } else {
+      const currentUser = await getCurrentUser(this);
+      this.setInitialFolders(currentUser.group_folder_ids);
+    }
+  }
+
+  async processFolders() {
+    while (this.folderIdsToRead.length) {
+      const folderToRead = this.folderIdsToRead.slice(-1)[0];
+      if (!folderToRead) {
+        break;
+      }
+
+      const { folderId, parentFolderId } = folderToRead;
+      if (this.allFolders.find((f) => f.folder.id === folderId)) {
+        console.log("folder already processed");
+        this.folderIdsToRead.pop();
+        continue;
+      }
+
+      const folder = await readQuipFolder(folderId, this);
+      this.allFolders.push(folder);
+
+      console.log("processing folder:", folder.folder.title);
+
+      const parent = this.findFolderById(parentFolderId);
+
+      for (const child of folder.children) {
+        if (child.folder_id) {
+          this.folderIdsToRead.push({
+            folderId: child.folder_id,
+            parentFolderId: folder.folder.id,
+          });
+        } else if (child.thread_id) {
+          this.filesToRead.push({
+            fileId: child.thread_id,
+            parentFolderId: folder.folder.id,
+          });
+        }
+      }
+
+      for (const adapter of this.adapters) {
+        try {
+          await adapter.onFolder({
+            folder,
+            parent,
+          });
+        } catch (e) {
+          console.error("adapter unhandled onFolder error", e);
+        }
+      }
+
+      this.folderIdsToRead.pop();
+
+      await this.processFiles();
+    }
+  }
+
+  async processFiles() {
+    while (this.filesToRead.length) {
+      const file = this.filesToRead.slice(-1)[0];
+      if (!file) {
+        break;
+      }
+
+      let html = await getThreadAsHTML(file.fileId, this);
+      html = await this.applyExtensions(html);
+      const thread = await getThread(file.fileId, this);
+
+      console.log("processing file:", thread.title);
+      try {
+        const parent = this.findFolderById(file.parentFolderId);
+
+        for (const adapter of this.adapters) {
+          await adapter.onFile({
+            thread,
+            html,
+            parent,
+          });
+        }
+      } catch (e) {
+        console.error("adapter unhandled onFile error", e);
+      }
+
+      this.filesToRead.pop();
+    }
+  }
 }
 
 /**
@@ -253,7 +345,13 @@ export async function getCurrentUser(quipState) {
 
 /**
  *
- * @param {string} fileId
+ * @param {string} fileIdif (await quipExport.existTempFile()) {
+  console.log("found state file, loading it...");
+  await quipExport.loadFromTempFile();
+} else {
+  const currentUser = await getCurrentUser(quipExport);
+  quipExport.setInitialFolders(currentUser.group_folder_ids);
+}
  * @param {QuipExport} quipState
  * @param {import("./typedefs").QuipThreadHTML | undefined} previousPart
  */
