@@ -1,4 +1,4 @@
-import { open, readFile, writeFile } from "fs/promises";
+import { open, readFile, rm, writeFile } from "fs/promises";
 import { fromHtml } from "hast-util-from-html";
 import { toHtml } from "hast-util-to-html";
 
@@ -153,6 +153,10 @@ export class QuipExport {
     await writeFile(this.tempFileName, JSON.stringify(data));
   }
 
+  async removeTempFile() {
+    await rm(this.tempFileName);
+  }
+
   async loadFromTempFile() {
     const f = await readFile(this.tempFileName);
 
@@ -225,23 +229,32 @@ export class QuipExport {
     if (await this.existTempFile()) {
       console.log("found state file, loading it...");
       await this.loadFromTempFile();
-    } else {
-      const currentUser = await getCurrentUser(this);
-      let folderIds = [];
 
-      if (this.groupFolders) {
-        folderIds = folderIds.concat(currentUser.group_folder_ids);
+      if (this.folderIdsToRead?.length || this.filesToRead?.length) {
+        return;
+      } else {
+        await this.removeTempFile();
       }
-      if (this.privateFolder) {
-        folderIds.push(currentUser.private_folder_id);
-      }
-      this.setInitialFolders(folderIds);
     }
+
+    const currentUser = await getCurrentUser(this);
+
+    let folderIds = [];
+
+    if (this.groupFolders) {
+      folderIds = folderIds.concat(currentUser.group_folder_ids);
+    }
+
+    if (this.privateFolder) {
+      folderIds.push(currentUser.private_folder_id);
+    }
+
+    this.setInitialFolders(folderIds);
   }
 
   async processFolders() {
     while (this.folderIdsToRead.length) {
-      const folderToRead = this.folderIdsToRead.slice(-1)[0];
+      const folderToRead = this.folderIdsToRead[0];
       if (!folderToRead) {
         break;
       }
@@ -249,7 +262,7 @@ export class QuipExport {
       const { folderId, parentFolderId } = folderToRead;
       if (this.allFolders.find((f) => f.folder.id === folderId)) {
         console.log("folder already processed");
-        this.folderIdsToRead.pop();
+        this.folderIdsToRead.shift();
         continue;
       }
 
@@ -285,7 +298,7 @@ export class QuipExport {
       }
 
       this.allFolders.push(folder);
-      this.folderIdsToRead.pop();
+      this.folderIdsToRead.shift();
 
       await this.processFiles();
     }
@@ -293,7 +306,7 @@ export class QuipExport {
 
   async processFiles() {
     while (this.filesToRead.length) {
-      const file = this.filesToRead.slice(-1)[0];
+      const file = this.filesToRead[0];
       if (!file) {
         break;
       }
@@ -317,7 +330,7 @@ export class QuipExport {
         console.error("adapter unhandled onFile error", e);
       }
 
-      this.filesToRead.pop();
+      this.filesToRead.shift();
     }
   }
 }
@@ -351,18 +364,21 @@ export async function getCurrentUser(quipState) {
         Authorization: "Bearer " + process.env.QUIP_TOKEN,
       },
     })
-    .then((r) => r.json());
+    .then((r) => r.json())
+    .then((user) => {
+      if (user.error) {
+        throw new Error(
+          "Quip API error: " + user.error_description || user.error,
+        );
+      } else {
+        return user;
+      }
+    });
 }
 
 /**
  *
- * @param {string} fileIdif (await quipExport.existTempFile()) {
-  console.log("found state file, loading it...");
-  await quipExport.loadFromTempFile();
-} else {
-  const currentUser = await getCurrentUser(quipExport);
-  quipExport.setInitialFolders(currentUser.group_folder_ids);
-}
+ * @param {string} fileId
  * @param {QuipExport} quipState
  * @param {import("./typedefs").QuipThreadHTML | undefined} previousPart
  */

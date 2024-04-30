@@ -3,6 +3,7 @@ import { Command } from "commander";
 import { NotionAdapter } from "./adapter/notion.js";
 import { FileSystemAdapter } from "./adapter/file-system.js";
 import { QuipExport } from "./quip.js";
+import { QuipAWSS3ImageUpload } from "./extension/aws-s3-image.js";
 const program = new Command();
 
 program
@@ -11,12 +12,12 @@ program
     "-q, --quip-api-token <quip-api-token>",
     "quip api token received from https://[your-organization].quip.com/dev/token",
   )
-  .requiredOption(
-    "-n, --notion-token <notion-token>",
+  .option(
+    "-n, --notion-token [notion-token]",
     "notion api token received from https://www.notion.so/my-integrations",
   )
-  .requiredOption(
-    "-r, --notion-root-document <notion-root-document>",
+  .option(
+    "-root, --notion-root-document [notion-root-document]",
     "id of the root page in Notion where you want to import the documents",
   )
   .option("-a, --adapters [adapters...]", "specify adapters (fs, notion)", [
@@ -34,16 +35,25 @@ program
   .action(async (options) => {
     if (options.S3) {
       if (!options.awsAccessKey) {
-        program.error("missing --aws-access-key attribute");
+        program.error("missing --aws-access-key option");
       }
       if (!options.awsSecretAccessKey) {
-        program.error("missing --aws-secret-access-key attribute");
+        program.error("missing --aws-secret-access-key option");
       }
       if (!options.awsRegion) {
-        program.error("missing --aws-region attribute");
+        program.error("missing --aws-region option");
       }
       if (!options.awsBucket) {
-        program.error("missing --aws-bucket attribute");
+        program.error("missing --aws-bucket option");
+      }
+    }
+
+    if (options.adapters.includes("notion")) {
+      if (!options.notionToken) {
+        program.error("missing --notion-token option");
+      }
+      if (!options.notionRootDocument) {
+        program.error("missing --notion-root-document option");
       }
     }
 
@@ -56,14 +66,26 @@ program
     process.env.AWS_REGION = options.awsRegion;
     process.env.AWS_BUCKET = options.awsBucket;
 
-    console.log(options);
-
     const extensions = [];
-    const adapters = [new NotionAdapter(), new FileSystemAdapter()];
+    if (options.S3) {
+      extensions.push(new QuipAWSS3ImageUpload());
+    }
+
+    const adapters = [...new Set(options.adapters)].map((adapter) => {
+      if (adapter === "fs") {
+        return new FileSystemAdapter();
+      } else if (adapter === "notion") {
+        return new NotionAdapter();
+      } else {
+        program.error("unknown adapter " + adapter);
+      }
+    });
+
     const quipExport = new QuipExport(undefined, extensions, adapters);
 
     await quipExport.initFolders();
     await quipExport.processFolders();
+    await quipExport.processFiles();
   });
 
 await program.parseAsync(process.argv);
