@@ -16,7 +16,7 @@ This tool simplifies the process of exporting documents from Quip to both the lo
 Before using Quip Exporter, ensure you have the following prerequisites in place:
 
 1. **Obtain Quip Developer Token:**
-   - Visit [Quip Developer Tokens](https://<your-organization>.quip.com/dev/token) and generate a developer token for your Quip organization. This token will be used to authenticate the exporter tool with Quip's API.
+   - Visit `https://<your-organization>.quip.com/dev/token` and generate a developer token for your Quip organization. This token will be used to authenticate the exporter tool with Quip's API.
 
 2. **Create Notion Internal Integration:**
    - Navigate to [Notion Integrations](https://www.notion.so/my-integrations) and create an internal integration to obtain a Notion token. This token is required for authentication with Notion's API.
