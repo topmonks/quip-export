@@ -3,7 +3,9 @@
   "version": "1.0.0",
   "description": "",
   "main": "index.js",
-  "bin": "bin.js",
+  "bin": {
+    "quip-notion": "bin.js"
+  },
   "scripts": {
     "dev": "NODE_OPTIONS=\"--openssl-legacy-provider -r dotenv/config\" node --import=extensionless/register",
     "test": "echo \"Error: no test specified\" && exit 1"
@@ -42,5 +44,9 @@
     "mdast-util-gfm-table": "2.0.0",
     "mdast-util-to-markdown": "2.1.0",
     "mime-types": "2.1.35"
-  }
+  },
+  "files": [
+    "*/**.js",
+    "*.js"
+  ]
 }
